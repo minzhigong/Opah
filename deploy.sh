@@ -9,8 +9,11 @@
 #   ./deploy.sh --with-nginx          # 同时安装 Nginx 前端配置
 #   REPO_URL=git@... BRANCH=dev ./deploy.sh   # 覆盖默认仓库/分支
 #
-# 说明：未安装 Docker 时会通过 get.docker.com 自动安装（默认走 Aliyun 镜像源）；
-#   可用 DOCKER_INSTALL_MIRROR=AzureChinaCloud 换源，或 =off 使用官方源
+# 说明：
+#   - 未安装 Docker 时会通过 get.docker.com 自动安装（默认走 Aliyun 镜像源，
+#     可用 DOCKER_INSTALL_MIRROR=AzureChinaCloud 换源，或 =off 使用官方源）
+#   - 自动配置 Docker Hub 镜像加速（默认 DaoCloud/1ms，可用 DOCKER_REGISTRY_MIRRORS
+#     覆盖，=off 跳过）
 set -euo pipefail
 
 # ===== 可配置项（可通过环境变量覆盖）=====
@@ -45,6 +48,25 @@ if ! command -v docker >/dev/null 2>&1; then
     || error "Docker 自动安装失败，可换源重试：DOCKER_INSTALL_MIRROR=AzureChinaCloud ./deploy.sh，或手动安装：https://docs.docker.com/engine/install/"
 fi
 docker info >/dev/null 2>&1 || error "Docker 守护进程不可用（权限不足或未启动）"
+
+# ---------- 1.5 配置 Docker Hub 镜像加速（国内网络直连 Docker Hub 会超时） ----------
+if [[ ${DOCKER_REGISTRY_MIRRORS:-on} != "off" ]]; then
+  DEFAULT_MIRRORS="https://docker.m.daocloud.io,https://docker.1ms.run"
+  MIRRORS="${DOCKER_REGISTRY_MIRRORS:-$DEFAULT_MIRRORS}"
+  MIRRORS_JSON=$(echo "$MIRRORS" | tr ',' '\n' | awk 'NF{printf "%s\"%s\"", (n++?",":""), $1}')
+  if [[ -f /etc/docker/daemon.json ]] && grep -q 'registry-mirrors' /etc/docker/daemon.json; then
+    info "Docker 已配置镜像加速，跳过。"
+  elif [[ -f /etc/docker/daemon.json ]]; then
+    warn "/etc/docker/daemon.json 已存在但未配置 registry-mirrors，请手动加入后重启 Docker。"
+  else
+    info "配置 Docker 镜像加速：${MIRRORS}"
+    mkdir -p /etc/docker
+    printf '{\n  "registry-mirrors": %s\n}\n' "$MIRRORS_JSON" > /etc/docker/daemon.json
+    systemctl restart docker || service docker restart
+    docker info >/dev/null 2>&1 || error "重启 Docker 后守护进程不可用，请检查：journalctl -u docker -e"
+    info "Docker 已重启，镜像加速生效。"
+  fi
+fi
 
 if docker compose version >/dev/null 2>&1; then
   COMPOSE="docker compose"
