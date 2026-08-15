@@ -4,6 +4,7 @@
 
 - 产品文档：[document/产品文档.md](document/产品文档.md)
 - 技术架构：[document/技术架构设计.md](document/技术架构设计.md)
+- 部署文档：[document/部署文档.md](document/部署文档.md)
 
 ## 仓库结构
 
@@ -11,21 +12,32 @@
 opah/
 ├── server/            # Spring Boot 后端（REST API + SSH + Docker）
 ├── web/               # React 前端（Vite + Ant Design）
-├── document/          # 产品与架构文档
-├── deploy.sh          # 一键部署脚本（Linux 单文件）
-└── docker-compose.yml # server + registry 编排
+├── document/          # 产品、架构与部署文档
+├── deploy.sh          # 一键部署脚本（Linux 服务器单文件）
+└── docker-compose.yml # server 编排（Linux 部署用）
 ```
 
-## 本地开发
+## 运行方式（双平台）
 
-后端（Java 17+，构建时自动下载依赖）：
+镜像分发不依赖 Registry：本机构建后 `docker save` 导出，经 SSH 管道直达目标主机 `docker load`。
+
+### Windows 本机运行（主用）
+
+前置条件：JDK 17+、Maven、Docker Desktop（Linux 容器模式，保持启动）。
 
 ```bash
 cd server
-mvn spring-boot:run          # 默认 http://localhost:8787，数据在 ./data
+mvn spring-boot:run          # 默认 http://localhost:8787，数据在 server/data
 ```
 
-前端（Node 18+）：
+- Docker 连接默认走 named pipe（`npipe:////./pipe/docker_engine`），可用 `DOCKER_HOST` 覆盖
+- 登录后验证 Docker 连通：`curl -b cookies.txt http://localhost:8787/api/v1/system/docker`
+
+### Linux 服务器部署（Compose）
+
+详见[部署文档](document/部署文档.md)。
+
+### 前端开发（Node 18+）
 
 ```bash
 cd web
@@ -35,9 +47,7 @@ npm run dev                  # http://localhost:5173，/api 代理到 8787
 
 默认管理员：`admin / opah-admin`（可用环境变量 `OPAH_ADMIN_PASSWORD` 覆盖）。
 
-## Docker 部署
-
-### 一键部署（推荐）
+## Linux 一键部署（推荐）
 
 在任意 Linux 机器上（需已安装 git、Docker 及 Compose v2），单条命令完成部署：
 
