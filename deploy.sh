@@ -53,7 +53,7 @@ docker info >/dev/null 2>&1 || error "Docker 守护进程不可用（权限不�
 if [[ ${DOCKER_REGISTRY_MIRRORS:-on} != "off" ]]; then
   DEFAULT_MIRRORS="https://docker.m.daocloud.io,https://docker.1ms.run"
   MIRRORS="${DOCKER_REGISTRY_MIRRORS:-$DEFAULT_MIRRORS}"
-  MIRRORS_JSON=$(echo "$MIRRORS" | tr ',' '\n' | awk 'NF{printf "%s\"%s\"", (n++?",":""), $1}')
+  MIRRORS_JSON=$(echo "$MIRRORS" | tr ',' '\n' | awk 'NF{printf "%s\"%s\"", (n++?",":""), $1}' | sed 's/^/[/;s/$/]/')
   if [[ -f /etc/docker/daemon.json ]] && grep -q 'registry-mirrors' /etc/docker/daemon.json; then
     info "Docker 已配置镜像加速，跳过。"
   elif [[ -f /etc/docker/daemon.json ]]; then
