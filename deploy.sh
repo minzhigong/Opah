@@ -8,6 +8,9 @@
 #   ./deploy.sh                       # 部署 / 升级
 #   ./deploy.sh --with-nginx          # 同时安装 Nginx 前端配置
 #   REPO_URL=git@... BRANCH=dev ./deploy.sh   # 覆盖默认仓库/分支
+#
+# 说明：未安装 Docker 时会通过 get.docker.com 自动安装；
+#   国内网络可用 DOCKER_INSTALL_MIRROR=Aliyun ./deploy.sh 走阿里云镜像安装
 set -euo pipefail
 
 # ===== 可配置项（可通过环境变量覆盖）=====
@@ -28,7 +31,12 @@ error() { printf '\033[31m[ERROR]\033[0m %s\n' "$*"; exit 1; }
 info "检查运行环境..."
 
 command -v git >/dev/null 2>&1 || error "未安装 git，请先安装：apt/yum install git"
-command -v docker >/dev/null 2>&1 || error "未安装 Docker，请先安装：https://docs.docker.com/engine/install/"
+
+if ! command -v docker >/dev/null 2>&1; then
+  info "未检测到 Docker，开始自动安装（官方脚本 get.docker.com）..."
+  curl -fsSL https://get.docker.com | sh -s -- ${DOCKER_INSTALL_MIRROR:+--mirror "$DOCKER_INSTALL_MIRROR"} \
+    || error "Docker 自动安装失败，请手动安装后重试：https://docs.docker.com/engine/install/"
+fi
 docker info >/dev/null 2>&1 || error "Docker 守护进程不可用（权限不足或未启动）"
 
 if docker compose version >/dev/null 2>&1; then
