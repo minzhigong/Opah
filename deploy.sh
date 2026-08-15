@@ -47,26 +47,39 @@ if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh -s -- "${MIRROR_ARGS[@]}" \
     || error "Docker 自动安装失败，可换源重试：DOCKER_INSTALL_MIRROR=AzureChinaCloud ./deploy.sh，或手动安装：https://docs.docker.com/engine/install/"
 fi
+# ---------- 1.5 配置 Docker Hub 镜像加速（国内网络直连 Docker Hub 会超时） ----------
+DEFAULT_MIRRORS="https://docker.m.daocloud.io,https://docker.1ms.run"
+MIRRORS="${DOCKER_REGISTRY_MIRRORS:-$DEFAULT_MIRRORS}"
+MIRRORS_JSON=$(echo "$MIRRORS" | tr ',' '\n' | awk 'NF{printf "%s\"%s\"", (n++?",":""), $1}' | sed 's/^/[/;s/$/]/')
+write_daemon_json() {
+  mkdir -p /etc/docker
+  printf '{\n  "registry-mirrors": %s\n}\n' "$MIRRORS_JSON" > /etc/docker/daemon.json
+  systemctl restart docker || service docker restart
+}
+
+if ! docker info >/dev/null 2>&1; then
+  # 守护进程不可用：若 daemon.json 无效则重写修复，否则报错
+  if [[ -f /etc/docker/daemon.json ]] && ! dockerd --validate --config-file /etc/docker/daemon.json >/dev/null 2>&1; then
+    warn "检测到无效的 /etc/docker/daemon.json，重写为镜像加速配置并重启 Docker ..."
+    write_daemon_json
+  else
+    error "Docker 守护进程不可用（权限不足或未启动），请检查：journalctl -u docker -e"
+  fi
+fi
 docker info >/dev/null 2>&1 || error "Docker 守护进程不可用（权限不足或未启动）"
 
-# ---------- 1.5 配置 Docker Hub 镜像加速（国内网络直连 Docker Hub 会超时） ----------
 if [[ ${DOCKER_REGISTRY_MIRRORS:-on} != "off" ]]; then
-  DEFAULT_MIRRORS="https://docker.m.daocloud.io,https://docker.1ms.run"
-  MIRRORS="${DOCKER_REGISTRY_MIRRORS:-$DEFAULT_MIRRORS}"
-  MIRRORS_JSON=$(echo "$MIRRORS" | tr ',' '\n' | awk 'NF{printf "%s\"%s\"", (n++?",":""), $1}' | sed 's/^/[/;s/$/]/')
-  if [[ -f /etc/docker/daemon.json ]] && grep -q 'registry-mirrors' /etc/docker/daemon.json; then
+  if grep -q 'registry-mirrors' /etc/docker/daemon.json 2>/dev/null; then
     info "Docker 已配置镜像加速，跳过。"
   elif [[ -f /etc/docker/daemon.json ]]; then
     warn "/etc/docker/daemon.json 已存在但未配置 registry-mirrors，请手动加入后重启 Docker。"
   else
     info "配置 Docker 镜像加速：${MIRRORS}"
-    mkdir -p /etc/docker
-    printf '{\n  "registry-mirrors": %s\n}\n' "$MIRRORS_JSON" > /etc/docker/daemon.json
-    systemctl restart docker || service docker restart
-    docker info >/dev/null 2>&1 || error "重启 Docker 后守护进程不可用，请检查：journalctl -u docker -e"
+    write_daemon_json
     info "Docker 已重启，镜像加速生效。"
   fi
 fi
+docker info >/dev/null 2>&1 || error "Docker 守护进程不可用，请检查：journalctl -u docker -e"
 
 if docker compose version >/dev/null 2>&1; then
   COMPOSE="docker compose"
