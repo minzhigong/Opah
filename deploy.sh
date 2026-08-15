@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Opah 一键部署脚本（Linux，单文件）
+# Opah 一键部署脚本（Linux 服务器，单文件）
 #
 # 该脚本可独立下载到任意机器直接运行，自动完成：
 #   拉取 Git 代码 -> 生成密钥/.env -> 构建前端 -> Compose 构建启动 -> 健康检查
+#
+# 仅用于 Linux 服务器部署；Windows 本机运行方式见 README（裸跑 + Docker Desktop）
 #
 # 用法：
 #   ./deploy.sh                       # 部署 / 升级
@@ -145,7 +147,7 @@ else
 fi
 
 # ---------- 5. 启动服务 ----------
-info "构建并启动 opah-server + opah-registry ..."
+info "构建并启动 opah-server ..."
 $COMPOSE up -d --build
 
 # ---------- 6. 健康检查 ----------
@@ -175,7 +177,7 @@ cat <<EOF
  管理员：    admin /（见 .env 中 OPAH_ADMIN_PASSWORD）
  代码目录：  ${INSTALL_DIR}
  前端：      web/dist（建议由 Nginx 提供并将 /api 反代到 ${OPAH_PORT}）
- 数据备份：  docker volume：opah-data、opah-registry
+ 数据备份：  docker volume：opah-data
  升级：      重新运行本脚本即可（自动拉取最新代码并重建）
 ------------------------------------------------------------
 EOF

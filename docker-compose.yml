@@ -12,17 +12,7 @@ services:
       OPAH_SECRET_KEY: ${OPAH_SECRET_KEY:-change-me-in-production}
       OPAH_ADMIN_PASSWORD: ${OPAH_ADMIN_PASSWORD:-opah-admin}
       OPAH_DATA_DIR: /data/opah
-    depends_on:
-      - opah-registry
-    restart: unless-stopped
-
-  opah-registry:
-    image: registry:2
-    container_name: opah-registry
-    volumes:
-      - opah-registry:/var/lib/registry
     restart: unless-stopped
 
 volumes:
   opah-data:
-  opah-registry:
