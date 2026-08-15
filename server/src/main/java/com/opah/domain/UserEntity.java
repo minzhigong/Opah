@@ -1,6 +1,8 @@
 package com.opah.domain;
 
+import com.opah.infra.SqliteTimestampConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -25,6 +27,7 @@ public class UserEntity {
     @Column(nullable = false)
     private String role = "ADMIN";
 
+    @Convert(converter = SqliteTimestampConverter.class)
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

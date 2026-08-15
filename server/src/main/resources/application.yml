@@ -3,7 +3,8 @@ spring:
     name: opah-server
   jpa:
     hibernate:
-      ddl-auto: validate
+      # schema 由 Flyway 全权管理；SQLite 的 INTEGER PRIMARY KEY 与 Hibernate validate 的 BIGINT 期望不兼容，故关闭
+      ddl-auto: none
     open-in-view: false
     properties:
       hibernate:
@@ -19,6 +20,8 @@ opah:
   data-dir: ${OPAH_DATA_DIR:./data}
   secret-key: ${OPAH_SECRET_KEY:dev-only-secret-key-change-me}
   admin-password: ${OPAH_ADMIN_PASSWORD:opah-admin}
+  docker:
+    host: ${DOCKER_HOST:}   # 留空按平台默认：Windows npipe / Linux unix socket
 
 logging:
   level:

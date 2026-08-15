@@ -22,6 +22,7 @@
         <hibernate-community.version>6.5.3.Final</hibernate-community.version>
         <sqlite-jdbc.version>3.46.1.3</sqlite-jdbc.version>
         <sshd.version>2.13.2</sshd.version>
+        <docker-java.version>3.4.2</docker-java.version>
     </properties>
 
     <dependencies>
@@ -62,6 +63,17 @@
             <groupId>org.apache.sshd</groupId>
             <artifactId>sshd-core</artifactId>
             <version>${sshd.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.docker-java</groupId>
+            <artifactId>docker-java-core</artifactId>
+            <version>${docker-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.docker-java</groupId>
+            <artifactId>docker-java-transport-httpclient5</artifactId>
+            <version>${docker-java.version}</version>
         </dependency>
 
         <dependency>

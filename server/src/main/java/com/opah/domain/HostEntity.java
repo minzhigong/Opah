@@ -1,6 +1,8 @@
 package com.opah.domain;
 
+import com.opah.infra.SqliteTimestampConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -44,9 +46,11 @@ public class HostEntity {
     @Column(name = "os_info")
     private String osInfo;
 
+    @Convert(converter = SqliteTimestampConverter.class)
     @Column(name = "last_seen_at")
     private LocalDateTime lastSeenAt;
 
+    @Convert(converter = SqliteTimestampConverter.class)
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

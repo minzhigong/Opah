@@ -54,7 +54,7 @@ public class AuthController {
         context.setAuthentication(auth);
         SecurityContextHolder.setContext(context);
         httpRequest.getSession(true)
-            .setAttribute(HttpSessionSecurityContextRepository.DEFAULT_SPRING_SECURITY_CONTEXT_ATTR_NAME,
+            .setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
                 context);
         return ResponseEntity.ok(new UserInfo(user.getId(), user.getUsername(), user.getRole()));
     }
