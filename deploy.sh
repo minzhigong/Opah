@@ -9,8 +9,8 @@
 #   ./deploy.sh --with-nginx          # 同时安装 Nginx 前端配置
 #   REPO_URL=git@... BRANCH=dev ./deploy.sh   # 覆盖默认仓库/分支
 #
-# 说明：未安装 Docker 时会通过 get.docker.com 自动安装；
-#   国内网络可用 DOCKER_INSTALL_MIRROR=Aliyun ./deploy.sh 走阿里云镜像安装
+# 说明：未安装 Docker 时会通过 get.docker.com 自动安装（默认走 Aliyun 镜像源）；
+#   可用 DOCKER_INSTALL_MIRROR=AzureChinaCloud 换源，或 =off 使用官方源
 set -euo pipefail
 
 # ===== 可配置项（可通过环境变量覆盖）=====
@@ -33,9 +33,16 @@ info "检查运行环境..."
 command -v git >/dev/null 2>&1 || error "未安装 git，请先安装：apt/yum install git"
 
 if ! command -v docker >/dev/null 2>&1; then
-  info "未检测到 Docker，开始自动安装（官方脚本 get.docker.com）..."
-  curl -fsSL https://get.docker.com | sh -s -- ${DOCKER_INSTALL_MIRROR:+--mirror "$DOCKER_INSTALL_MIRROR"} \
-    || error "Docker 自动安装失败，请手动安装后重试：https://docs.docker.com/engine/install/"
+  DOCKER_MIRROR="${DOCKER_INSTALL_MIRROR:-Aliyun}"
+  MIRROR_ARGS=()
+  if [[ "$DOCKER_MIRROR" != "off" ]]; then
+    MIRROR_ARGS=(--mirror "$DOCKER_MIRROR")
+    info "未检测到 Docker，开始自动安装（镜像源：${DOCKER_MIRROR}）..."
+  else
+    info "未检测到 Docker，开始自动安装（官方源）..."
+  fi
+  curl -fsSL https://get.docker.com | sh -s -- "${MIRROR_ARGS[@]}" \
+    || error "Docker 自动安装失败，可换源重试：DOCKER_INSTALL_MIRROR=AzureChinaCloud ./deploy.sh，或手动安装：https://docs.docker.com/engine/install/"
 fi
 docker info >/dev/null 2>&1 || error "Docker 守护进程不可用（权限不足或未启动）"
 
