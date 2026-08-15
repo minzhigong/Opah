@@ -1,0 +1,27 @@
+# Java / Maven
+server/target/
+*.class
+
+# Node
+web/node_modules/
+web/dist/
+
+# 运行时数据与密钥
+server/data/
+data/
+.env
+*.db
+
+# IDE / 编辑器
+.idea/
+.vscode/
+document/.obsidian/
+*.iml
+
+# 本地工具链与会话配置
+.tools/
+.claude/
+
+# 系统
+.DS_STORE
+Thumbs.db
