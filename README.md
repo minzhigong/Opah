@@ -69,11 +69,11 @@ powershell -File packager/build.ps1
 
 ## 依赖版本
 
-| 组件 | 版本 |
-| --- | --- |
-| Java | 21 (LTS) |
-| Spring Boot | 3.3.x |
-| Docker client | docker-java 3.5.x |
-| Git | JGit 6.10 |
-| SSH | Apache MINA sshd 2.13 |
-| 存储 | SQLite + Flyway |
+| 组件            | 版本                    |
+| ------------- | --------------------- |
+| Java          | 21 (LTS)              |
+| Spring Boot   | 3.3.x                 |
+| Docker client | docker-java 3.5.x     |
+| Git           | JGit 6.10             |
+| SSH           | Apache MINA sshd 2.13 |
+| 存储            | SQLite + Flyway       |
