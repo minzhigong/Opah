@@ -42,8 +42,14 @@ Write-Host "[4/5] jlink trimming runtime..." -ForegroundColor Cyan
   --output $runtimeDir
 if ($LASTEXITCODE -ne 0) { throw "jlink failed" }
 
-# 5. jpackage app-image
+# 5. jpackage app-image（打包前先备份 data，避免覆盖用户数据）
 $outDir = "$root\packager\out\app"
+$dataBackup = "$root\packager\out\.data-backup"
+$hadData = Test-Path "$outDir\opah\data"
+if ($hadData) {
+    if (Test-Path $dataBackup) { Remove-Item $dataBackup -Recurse -Force }
+    Move-Item "$outDir\opah\data" $dataBackup
+}
 if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
 $jarPath = Get-ChildItem "$root\server\target\opah-server-*.jar" | Select-Object -First 1
 Write-Host "[5/5] jpackage app-image..." -ForegroundColor Cyan
@@ -56,6 +62,12 @@ Write-Host "[5/5] jpackage app-image..." -ForegroundColor Cyan
   --win-console `
   --dest $outDir
 if ($LASTEXITCODE -ne 0) { throw "jpackage failed" }
+
+# 恢复 data 到新 app（若之前有）
+if ($hadData -and (Test-Path $dataBackup)) {
+    Move-Item $dataBackup "$outDir\opah\data"
+    Write-Host "data 已恢复到新包" -ForegroundColor Cyan
+}
 
 # 打包 zip（排除 data 目录：升级时只替换代码，不覆盖用户数据）
 $zipName = "opah-windows.zip"

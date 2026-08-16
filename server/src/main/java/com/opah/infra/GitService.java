@@ -149,6 +149,42 @@ public class GitService {
         return reposDir.resolve(projectId + "/work/" + serviceId);
     }
 
+    /**
+     * 从 bare 仓库检出默认分支到临时扫描目录（向导阶段 scan 用，不依赖 serviceId）。
+     * bare 尚未就绪（异步 clone 未完成）时返回 null。
+     */
+    public Path checkoutScanWork(Long projectId) {
+        Path bare = reposDir.resolve(projectId + "/bare.git");
+        if (!Files.exists(bare)) {
+            return null;
+        }
+        Path scanWork = reposDir.resolve(projectId + "/work/_scan");
+        try {
+            deleteRecursive(scanWork);
+            Files.createDirectories(scanWork.getParent());
+            String branch;
+            try (Repository bareRepo = new FileRepositoryBuilder()
+                    .setGitDir(bare.toFile()).readEnvironment().findGitDir().build()) {
+                branch = bareRepo.getBranch();   // 默认分支短名（如 main）
+                if (branch == null || branch.isBlank() || branch.length() == 40) {
+                    branch = "main";             // detached/空仓库兜底
+                }
+            }
+            try (Git g = Git.cloneRepository()
+                    .setURI(bare.toUri().toString())
+                    .setDirectory(scanWork.toFile())
+                    .setNoCheckout(true)
+                    .call()) {
+                g.checkout().setName(branch).call();
+            }
+            log.info("scan work checked out: {} -> {}", branch, scanWork);
+            return scanWork;
+        } catch (Exception e) {
+            log.warn("checkout scan work failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
     private void deleteRecursive(Path p) throws Exception {
         if (Files.exists(p)) {
             try (var walk = Files.walk(p)) {

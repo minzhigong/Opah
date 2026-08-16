@@ -2,6 +2,7 @@ package com.opah.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opah.infra.GitService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,9 +26,11 @@ public class UnitScanService {
     private static final Logger log = LoggerFactory.getLogger(UnitScanService.class);
     private final ObjectMapper mapper = new ObjectMapper();
     private final Path reposDir;
+    private final GitService git;
 
-    public UnitScanService(@Value("${opah.data-dir:./data}") String dataDir) {
+    public UnitScanService(@Value("${opah.data-dir:./data}") String dataDir, GitService git) {
         this.reposDir = Path.of(dataDir, "repos");
+        this.git = git;
     }
 
     public record Candidate(String subPath, String type, String detail, boolean recommended) {
@@ -54,13 +57,16 @@ public class UnitScanService {
         Path workRoot = reposDir.resolve(projectId + "/work");
         if (Files.isDirectory(workRoot)) {
             try (var stream = Files.list(workRoot)) {
-                var first = stream.filter(Files::isDirectory).findFirst();
+                var first = stream.filter(Files::isDirectory)
+                        .filter(p -> !"_scan".equals(p.getFileName().toString()))
+                        .findFirst();
                 if (first.isPresent()) {
                     return first.get();
                 }
             }
         }
-        return null;
+        // 兜底：还没有任何单元工作区时，从 bare 仓库临时检出默认分支作为扫描根
+        return git.checkoutScanWork(projectId);
     }
 
     private void scanDirectory(Path root, Path dir, List<Candidate> result, int depth) throws IOException {
