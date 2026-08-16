@@ -36,9 +36,9 @@ if (Test-Path $runtimeDir) { Remove-Item $runtimeDir -Recurse -Force }
 Write-Host "[4/5] jlink trimming runtime..." -ForegroundColor Cyan
 & (Join-Path $jdk "bin\jlink.exe") `
   --module-path $jmods `
-  --add-modules java.base,java.logging,java.naming,java.management,java.sql,java.desktop,jdk.crypto.ec,jdk.unsupported `
+  --add-modules java.se,jdk.unsupported,jdk.crypto.ec,jdk.management,jdk.zipfs `
   --strip-debug --no-header-files --no-man-pages `
-  --compress=2 `
+  --compress=zip-6 `
   --output $runtimeDir
 if ($LASTEXITCODE -ne 0) { throw "jlink failed" }
 

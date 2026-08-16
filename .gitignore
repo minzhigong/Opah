@@ -2,6 +2,7 @@
 server/target/
 web/node_modules/
 web/dist/
+server/src/main/resources/static/
 packager/out/
 *.class
 *.jar
@@ -17,6 +18,9 @@ opah.db
 *.iml
 .vscode/
 document/.obsidian/
+
+# WorkBuddy local data
+.workbuddy/
 
 # OS
 .DS_Store

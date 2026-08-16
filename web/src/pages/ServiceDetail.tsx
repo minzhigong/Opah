@@ -49,7 +49,7 @@ export default function ServiceDetail() {
     return () => clearInterval(t);
   }, [svcId]);
 
-  useEffect(() => () => stompRef.current?.deactivate(), []);
+  useEffect(() => () => { stompRef.current?.deactivate(); }, []);
 
   const onBuild = async () => {
     const r = await triggerBuild(svcId, ref);
