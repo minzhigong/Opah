@@ -1,27 +1,23 @@
-# Java / Maven
+# build artifacts
 server/target/
-*.class
-
-# Node
 web/node_modules/
 web/dist/
+packager/out/
+*.class
+*.jar
+*.log
 
-# 运行时数据与密钥
-server/data/
+# runtime data (never commit secrets / local state)
 data/
-.env
-*.db
+server/data/
+opah.db
 
-# IDE / 编辑器
+# IDE
 .idea/
+*.iml
 .vscode/
 document/.obsidian/
-*.iml
 
-# 本地工具链与会话配置
-.tools/
-.claude/
-
-# 系统
-.DS_STORE
+# OS
+.DS_Store
 Thumbs.db

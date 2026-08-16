@@ -1,44 +1,33 @@
 package com.opah.domain;
 
-import com.opah.infra.SqliteTimestampConverter;
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "hosts")
+@Table(name = "host")
 public class HostEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false)
     private String ip;
 
-    @Column(name = "ssh_port", nullable = false)
-    private int sshPort = 22;
+    @Column(name = "ssh_port")
+    private Integer sshPort;
 
-    @Column(nullable = false)
     private String username;
 
-    @Column(name = "auth_type", nullable = false)
-    private String authType = "PASSWORD";
+    @Column(name = "auth_credential_id")
+    private Long authCredentialId;
 
-    /** SSH 密码/私钥，AES-256-GCM 加密后存储 */
-    @Column(name = "secret_cipher", nullable = false)
-    private String secretCipher;
-
-    @Column(nullable = false)
-    private String status = "UNKNOWN";
+    private String status;
 
     @Column(name = "docker_version")
     private String dockerVersion;
@@ -46,103 +35,35 @@ public class HostEntity {
     @Column(name = "os_info")
     private String osInfo;
 
-    @Convert(converter = SqliteTimestampConverter.class)
     @Column(name = "last_seen_at")
-    private LocalDateTime lastSeenAt;
+    private String lastSeenAt;
 
-    @Convert(converter = SqliteTimestampConverter.class)
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @Column(name = "created_at")
+    private String createdAt;
 
-    public Long getId() {
-        return id;
+    public HostEntity() {
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getIp() {
-        return ip;
-    }
-
-    public void setIp(String ip) {
-        this.ip = ip;
-    }
-
-    public int getSshPort() {
-        return sshPort;
-    }
-
-    public void setSshPort(int sshPort) {
-        this.sshPort = sshPort;
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getAuthType() {
-        return authType;
-    }
-
-    public void setAuthType(String authType) {
-        this.authType = authType;
-    }
-
-    public String getSecretCipher() {
-        return secretCipher;
-    }
-
-    public void setSecretCipher(String secretCipher) {
-        this.secretCipher = secretCipher;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getDockerVersion() {
-        return dockerVersion;
-    }
-
-    public void setDockerVersion(String dockerVersion) {
-        this.dockerVersion = dockerVersion;
-    }
-
-    public String getOsInfo() {
-        return osInfo;
-    }
-
-    public void setOsInfo(String osInfo) {
-        this.osInfo = osInfo;
-    }
-
-    public LocalDateTime getLastSeenAt() {
-        return lastSeenAt;
-    }
-
-    public void setLastSeenAt(LocalDateTime lastSeenAt) {
-        this.lastSeenAt = lastSeenAt;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getIp() { return ip; }
+    public void setIp(String ip) { this.ip = ip; }
+    public Integer getSshPort() { return sshPort; }
+    public void setSshPort(Integer sshPort) { this.sshPort = sshPort; }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+    public Long getAuthCredentialId() { return authCredentialId; }
+    public void setAuthCredentialId(Long authCredentialId) { this.authCredentialId = authCredentialId; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getDockerVersion() { return dockerVersion; }
+    public void setDockerVersion(String dockerVersion) { this.dockerVersion = dockerVersion; }
+    public String getOsInfo() { return osInfo; }
+    public void setOsInfo(String osInfo) { this.osInfo = osInfo; }
+    public String getLastSeenAt() { return lastSeenAt; }
+    public void setLastSeenAt(String lastSeenAt) { this.lastSeenAt = lastSeenAt; }
+    public String getCreatedAt() { return createdAt; }
+    public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }
 }

@@ -1,0 +1,19 @@
+# Opah rendered Dockerfile for {{framework}} frontend
+# template-version: 1
+FROM node:{{nodeVersion}}-alpine AS build
+WORKDIR /app
+{{#if hasPackageLock}}
+COPY package-lock.json ./
+{{/if}}
+COPY package.json ./
+{{#if npmRegistry}}
+RUN npm config set registry {{npmRegistry}}
+{{/if}}
+RUN npm install
+COPY . .
+RUN {{buildCommand}}
+
+FROM nginx:{{nginxVersion}}-alpine
+COPY --from=build /app/{{distDir}} /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80

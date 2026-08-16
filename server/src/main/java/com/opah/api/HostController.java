@@ -1,17 +1,15 @@
 package com.opah.api;
 
+import com.opah.domain.CredentialEntity;
+import com.opah.domain.CredentialRepository;
 import com.opah.domain.HostEntity;
 import com.opah.domain.HostRepository;
 import com.opah.infra.CryptoService;
-import com.opah.infra.SshExecutor;
-import com.opah.infra.SshResult;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
+import com.opah.service.HostService;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
-import org.springframework.http.ResponseEntity;
+import java.util.Map;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,94 +18,79 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 主机管理 API（HOST-01/02/03/04） */
 @RestController
 @RequestMapping("/api/v1/hosts")
 public class HostController {
 
-    private final HostRepository hostRepository;
-    private final CryptoService cryptoService;
-    private final SshExecutor sshExecutor;
+    private final HostRepository hosts;
+    private final HostService hostService;
+    private final CredentialRepository credentials;
+    private final CryptoService crypto;
 
-    public HostController(HostRepository hostRepository, CryptoService cryptoService,
-                          SshExecutor sshExecutor) {
-        this.hostRepository = hostRepository;
-        this.cryptoService = cryptoService;
-        this.sshExecutor = sshExecutor;
-    }
-
-    public record CreateHostRequest(
-        @NotBlank String name,
-        @NotBlank String ip,
-        @Min(1) @Max(65535) int sshPort,
-        @NotBlank String username,
-        @NotBlank String password) {
-    }
-
-    public record HostResponse(Long id, String name, String ip, int sshPort, String username,
-                               String status, String dockerVersion, String osInfo,
-                               LocalDateTime lastSeenAt, LocalDateTime createdAt) {
-
-        static HostResponse from(HostEntity h) {
-            return new HostResponse(h.getId(), h.getName(), h.getIp(), h.getSshPort(),
-                h.getUsername(), h.getStatus(), h.getDockerVersion(), h.getOsInfo(),
-                h.getLastSeenAt(), h.getCreatedAt());
-        }
-    }
-
-    public record CheckResponse(boolean ok, String dockerVersion, String osInfo, String error) {
+    public HostController(HostRepository hosts, HostService hostService,
+                          CredentialRepository credentials, CryptoService crypto) {
+        this.hosts = hosts;
+        this.hostService = hostService;
+        this.credentials = credentials;
+        this.crypto = crypto;
     }
 
     @GetMapping
-    public List<HostResponse> list() {
-        return hostRepository.findAll().stream().map(HostResponse::from).toList();
+    public List<HostEntity> list() {
+        return hosts.findAll();
     }
 
     @PostMapping
-    public HostResponse create(@RequestBody @Valid CreateHostRequest request) {
-        HostEntity host = new HostEntity();
-        host.setName(request.name());
-        host.setIp(request.ip());
-        host.setSshPort(request.sshPort() > 0 ? request.sshPort() : 22);
-        host.setUsername(request.username());
-        host.setSecretCipher(cryptoService.encrypt(request.password()));
-        return HostResponse.from(hostRepository.save(host));
+    public Map<String, Object> add(@RequestBody Map<String, Object> body) {
+        // 内联凭据（password 或 privateKey）→ 自动建 credential
+        Long credentialId = body.get("credentialId") == null ? null
+                : Long.valueOf(String.valueOf(body.get("credentialId")));
+        String inlinePassword = (String) body.get("password");
+        String inlineKey = (String) body.get("privateKey");
+        if (credentialId == null && (inlinePassword != null || inlineKey != null)) {
+            CredentialEntity c = new CredentialEntity();
+            c.setName("host-" + body.get("name"));
+            c.setType(inlineKey != null ? "SSH_KEY" : "PASSWORD");
+            c.setSecretCipher(crypto.encrypt(inlineKey != null ? inlineKey : inlinePassword));
+            c.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+            credentialId = credentials.save(c).getId();
+        }
+        HostService.HostInput input = new HostService.HostInput(
+                (String) body.get("name"),
+                (String) body.get("ip"),
+                body.get("sshPort") == null ? 22 : Integer.valueOf(String.valueOf(body.get("sshPort"))),
+                (String) body.get("username"),
+                credentialId);
+        HostEntity host = hostService.add(input);
+        return Map.of("id", host.getId(), "status", host.getStatus(),
+                "dockerVersion", host.getDockerVersion() == null ? "" : host.getDockerVersion(),
+                "osInfo", host.getOsInfo() == null ? "" : host.getOsInfo());
+    }
+
+    @PostMapping("/{id}/test")
+    public Map<String, Object> test(@PathVariable Long id) {
+        HostService.TestResult r = hostService.test(id);
+        hosts.findById(id).ifPresent(h -> {
+            h.setStatus(r.ok() ? "ONLINE" : "OFFLINE");
+            h.setDockerVersion(r.dockerVersion());
+            h.setOsInfo(r.osInfo());
+            h.setLastSeenAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+            hosts.save(h);
+        });
+        return Map.of("ok", r.ok(), "message", r.message(),
+                "dockerVersion", r.dockerVersion() == null ? "" : r.dockerVersion(),
+                "osInfo", r.osInfo() == null ? "" : r.osInfo());
+    }
+
+    @GetMapping("/{id}/containers")
+    public List<Map<String, Object>> containers(@PathVariable Long id) {
+        return hostService.containers(id);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        if (!hostRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
-        }
-        hostRepository.deleteById(id);
-        return ResponseEntity.ok().build();
-    }
-
-    /** SSH 连通性 + Docker 环境检测（HOST-01） */
-    @PostMapping("/{id}/check")
-    public CheckResponse check(@PathVariable Long id) {
-        HostEntity host = hostRepository.findById(id).orElseThrow();
-        try {
-            String password = cryptoService.decrypt(host.getSecretCipher());
-            SshResult docker = sshExecutor.execute(host.getIp(), host.getSshPort(),
-                host.getUsername(), password, "docker version --format '{{.Server.Version}}'");
-            if (!docker.isSuccess()) {
-                host.setStatus("SSH_OK_DOCKER_MISSING");
-                hostRepository.save(host);
-                return new CheckResponse(false, null, null,
-                    "SSH 连接成功，但 Docker 不可用: " + docker.stderr());
-            }
-            SshResult os = sshExecutor.execute(host.getIp(), host.getSshPort(),
-                host.getUsername(), password, "uname -sr");
-            host.setStatus("ONLINE");
-            host.setDockerVersion(docker.stdout());
-            host.setOsInfo(os.isSuccess() ? os.stdout() : null);
-            host.setLastSeenAt(LocalDateTime.now());
-            hostRepository.save(host);
-            return new CheckResponse(true, docker.stdout(), os.stdout(), null);
-        } catch (Exception e) {
-            host.setStatus("OFFLINE");
-            hostRepository.save(host);
-            return new CheckResponse(false, null, null, "SSH 连接失败: " + e.getMessage());
-        }
+    public Map<String, Object> delete(@PathVariable Long id) {
+        hosts.deleteById(id);
+        return Map.of("ok", true);
     }
 }

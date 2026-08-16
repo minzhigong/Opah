@@ -1,86 +1,77 @@
 # Opah
 
-通过 Web UI 完成运维工作的一站式工具：从 Git 仓库拉取代码，自动构建 Docker 镜像，一键部署与持续运维。
+一站式运维部署工具：运行在你的 Windows/Linux 机器上，自动拉取 Git 代码、构建 Docker 镜像，把服务一键部署到远程 Linux 服务器，全程在 Web UI 完成，无需手工 SSH。
 
-- 产品文档：[document/产品文档.md](document/产品文档.md)
-- 技术架构：[document/技术架构设计.md](document/技术架构设计.md)
-- 部署文档：[document/部署文档.md](document/部署文档.md)
+> 一期（MVP）聚焦：Java 后端 + React/Vue 前端的构建与部署闭环，Windows 绿色自包含包交付。
 
-## 仓库结构
+## 架构概览
+
+```
+Git 仓库 ──拉取──> Opah（用户本机，Windows）
+                    │ docker build（本机 Docker，可走代理拉基础镜像）
+                    ▼
+                 版本化镜像
+                    │ docker save | ssh docker load（流式，无 Registry）
+                    ▼
+              Linux 目标主机 ──容器运行──> Java / React / Vue 服务
+```
+
+- 构建在本机执行（复用宿主 Docker daemon）；镜像经 SSH 管道分发，目标主机零安装（仅需 SSH + Docker，无 Agent）。
+- 元数据存 SQLite（单文件，`./data` 便携）；凭据 AES-256-GCM 加密。
+- 详见 `document/产品文档.md` 与 `document/技术架构设计.md`。
+
+## 目录结构
 
 ```
 opah/
-├── server/            # Spring Boot 后端（REST API + SSH + Docker）
-├── web/               # React 前端（Vite + Ant Design）
-├── document/          # 产品、架构与部署文档
-├── deploy.sh          # 一键部署脚本（Linux 服务器单文件）
-└── docker-compose.yml # server 编排（Linux 部署用）
+├── server/        Spring Boot 3.3 后端（Java 21）
+├── web/           React 18 + AntD 5 前端（Vite）
+├── packager/      Windows 绿色包打包脚本
+├── document/      产品与架构文档
 ```
 
-## 运行方式（双平台）
+## 本地开发
 
-镜像分发不依赖 Registry：本机构建后 `docker save` 导出，经 SSH 管道直达目标主机 `docker load`。
-
-### Windows 本机运行（主用）
-
-前置条件：JDK 17+、Maven、Docker Desktop（Linux 容器模式，保持启动）。
+后端（Java 21 + Maven）：
 
 ```bash
 cd server
-mvn spring-boot:run          # 默认 http://localhost:8787，数据在 server/data
+JAVA_HOME=<jdk21> mvn spring-boot:run     # 默认 127.0.0.1:8787
 ```
 
-- Docker 连接默认走 named pipe（`npipe:////./pipe/docker_engine`），可用 `DOCKER_HOST` 覆盖
-- 登录后验证 Docker 连通：`curl -b cookies.txt http://localhost:8787/api/v1/system/docker`
-
-### Linux 服务器部署（Compose）
-
-详见[部署文档](document/部署文档.md)。
-
-### 前端开发（Node 18+）
+前端（Node 22）：
 
 ```bash
 cd web
 npm install
-npm run dev                  # http://localhost:5173，/api 代理到 8787
+npm run dev                                # Vite 代理 /api 与 /ws 到 8787
 ```
 
-默认管理员：`admin / opah-admin`（可用环境变量 `OPAH_ADMIN_PASSWORD` 覆盖）。
+首次打开 `http://127.0.0.1:5173` 会进入管理员设置向导。
 
-## Linux 一键部署（推荐）
+## 一键打包（Windows 绿色包）
 
-在任意 Linux 机器上（需已安装 git、Docker 及 Compose v2），单条命令完成部署：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/minzhigong/Opah/main/deploy.sh -o deploy.sh
-chmod +x deploy.sh && ./deploy.sh
+```powershell
+$env:JAVA_HOME = "C:\path\to\jdk-21"
+powershell -File packager/build.ps1
+# 产物：packager/out/opah-windows.zip（解压双击 opah.exe 即用）
 ```
 
-脚本自动完成：拉取代码到 `/opt/opah` -> 生成随机密钥与管理员密码（写入 `.env`）-> 构建前端 -> Compose 构建启动 -> 健康检查，结束后打印访问地址和账号信息。
+## 使用流程
 
-常用用法：
+1. 解压 zip，双击 `opah.exe`（自动打开浏览器，默认 `http://127.0.0.1:8787`）；
+2. 首次设置管理员密码；
+3. 添加目标主机（SSH 连接信息，自动检测 Docker）；
+4. 接入 Git 项目 → 扫描部署单元 → 勾选确认；
+5. 触发构建 → 选择版本 + 主机 → 一键部署 / 回滚。
 
-```bash
-./deploy.sh                          # 部署 / 升级（重跑即升级，.env 保持不变）
-./deploy.sh --with-nginx             # 同时安装 Nginx 配置：静态前端 + /api 反代
-REPO_URL=git@... BRANCH=dev ./deploy.sh   # 覆盖默认仓库/分支
-OPAH_PORT=9000 ./deploy.sh           # 自定义端口（默认 8787）
-```
+## 依赖版本
 
-### 手动 Compose 部署
-
-```bash
-docker compose up -d --build
-```
-
-环境变量（通过 `.env` 或 shell 传入）：
-
-| 变量 | 说明 | 默认值 |
-| --- | --- | --- |
-| `OPAH_SECRET_KEY` | 凭据加密主密钥（生产必改） | change-me-in-production |
-| `OPAH_ADMIN_PASSWORD` | 初始管理员密码 | opah-admin |
-| `OPAH_PORT` | 对外端口 | 8787 |
-
-## 开发状态
-
-M1（骨架 + 登录 + 主机管理）开发中。里程碑规划见架构文档 §10。
+| 组件 | 版本 |
+| --- | --- |
+| Java | 21 (LTS) |
+| Spring Boot | 3.3.x |
+| Docker client | docker-java 3.5.x |
+| Git | JGit 6.10 |
+| SSH | Apache MINA sshd 2.13 |
+| 存储 | SQLite + Flyway |

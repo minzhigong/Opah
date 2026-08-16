@@ -1,93 +1,61 @@
 package com.opah.infra;
 
 import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.model.Info;
-import com.github.dockerjava.api.model.Version;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import com.github.dockerjava.transport.DockerHttpClient;
-import jakarta.annotation.PreDestroy;
-import java.net.URI;
 import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
-/** 本机 Docker daemon 连接（Windows: named pipe / Linux: unix socket），构建与镜像分发在 M2 实现 */
+/**
+ * 本机 Docker 客户端：Windows 走 named pipe（httpclient5 传输内置支持），
+ * Linux 走 unix socket；DOCKER_HOST 环境变量可覆盖。
+ */
 @Component
-public class DockerClientFactory implements ApplicationRunner {
+public class DockerClientFactory {
 
     private static final Logger log = LoggerFactory.getLogger(DockerClientFactory.class);
-    private static final String WINDOWS_DEFAULT_HOST = "npipe:////./pipe/docker_engine";
-    private static final String UNIX_DEFAULT_HOST = "unix:///var/run/docker.sock";
 
-    private final DockerClient client;
-    private final String dockerHost;
+    private volatile DockerClient client;
 
-    public DockerClientFactory(@Value("${opah.docker.host:}") String configuredHost) {
-        this.dockerHost = resolveHost(configuredHost);
-        DockerClientConfig config = DefaultDockerClientConfig.createDefaultConfigBuilder()
-            .withDockerHost(this.dockerHost)
-            .build();
-        DockerHttpClient httpClient = new ApacheDockerHttpClient.Builder()
-            .dockerHost(URI.create(this.dockerHost))
-            .sslConfig(config.getSSLConfig())
-            .maxConnections(10)
-            .connectionTimeout(Duration.ofSeconds(5))
-            .build();
-        this.client = DockerClientImpl.getInstance(config, httpClient);
-    }
-
-    private static String resolveHost(String configuredHost) {
-        if (configuredHost != null && !configuredHost.isBlank()) {
-            return configuredHost;
+    /** 懒加载：仅在实际执行 docker 操作时建立连接，避免本机无 Docker 时阻断启动 */
+    public synchronized DockerClient client() {
+        if (client == null) {
+            DefaultDockerClientConfig.Builder cfg = DefaultDockerClientConfig.createDefaultConfigBuilder();
+            DockerClientConfig config = cfg.build();
+            log.info("Docker daemon: {}", config.getDockerHost());
+            ApacheDockerHttpClient.Builder httpClientBuilder = new ApacheDockerHttpClient.Builder()
+                .maxConnections(10)
+                .connectionTimeout(Duration.ofSeconds(10))
+                .responseTimeout(Duration.ofMinutes(5));
+            DockerHttpClient httpClient = httpClientBuilder.dockerHost(config.getDockerHost()).build();
+            client = DockerClientImpl.getInstance(config, httpClient);
         }
-        String os = System.getProperty("os.name", "").toLowerCase();
-        return os.contains("win") ? WINDOWS_DEFAULT_HOST : UNIX_DEFAULT_HOST;
-    }
-
-    public DockerClient get() {
         return client;
     }
 
-    public DockerProbe probe() {
+    /** ping 探活，返回状态描述：OK / 具体失败原因（连接失败不抛异常） */
+    public DockerStatus ping() {
         try {
-            Version version = client.versionCmd().exec();
-            Info info = client.infoCmd().exec();
-            return new DockerProbe(true, dockerHost, version.getVersion(),
-                info.getOsType(), version.getApiVersion(), null);
+            client().pingCmd().exec();
+            return DockerStatus.ok();
         } catch (Exception e) {
-            return new DockerProbe(false, dockerHost, null, null, null, e.getMessage());
+            return DockerStatus.fail(classify(e));
         }
     }
 
-    @Override
-    public void run(ApplicationArguments args) {
-        DockerProbe probe = probe();
-        if (probe.connected()) {
-            log.info("Docker 连接成功: {} (server {}, api {})",
-                probe.dockerHost(), probe.serverVersion(), probe.apiVersion());
-        } else {
-            log.warn("Docker 不可用（{}）：{}。镜像构建/分发功能将无法使用，主机管理不受影响。",
-                probe.dockerHost(), probe.error());
+    private String classify(Exception e) {
+        String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+        if (msg.contains("pipe") || msg.contains("npipe") || msg.contains("not found") || msg.contains("404")) {
+            return "Docker Desktop 未安装或 named pipe 不存在";
         }
-    }
-
-    @PreDestroy
-    public void close() {
-        try {
-            client.close();
-        } catch (java.io.IOException e) {
-            log.warn("关闭 Docker 客户端失败: {}", e.getMessage());
+        if (msg.contains("refused") || msg.contains("timeout") || msg.contains("timed out")) {
+            return "Docker daemon 未启动或正在启动中";
         }
-    }
-
-    public record DockerProbe(boolean connected, String dockerHost, String serverVersion,
-                              String osType, String apiVersion, String error) {
+        return "Docker daemon 连接异常: " + e.getMessage();
     }
 }

@@ -1,0 +1,27 @@
+# Opah rendered Dockerfile for Java (Spring Boot)
+# template-version: 1
+FROM {{baseImage}} AS build
+WORKDIR /build
+{{#if useWrapper}}
+COPY .mvn/ .mvn/
+COPY mvnw pom.xml ./
+RUN ./mvnw dependency:go-offline -B -q || true
+COPY src ./src
+RUN ./mvnw package -DskipTests -B -q
+{{else}}
+COPY pom.xml ./
+RUN mvn dependency:go-offline -B -q || true
+COPY src ./src
+RUN mvn package -DskipTests -B -q
+{{/if}}
+
+FROM {{runtimeImage}} AS runtime
+WORKDIR /app
+{{#if appName}}
+COPY --from=build /build/target/*.jar app.jar
+{{else}}
+COPY --from=build /build/target/*.jar app.jar
+{{/if}}
+EXPOSE {{port}}
+ENV TZ=Asia/Shanghai
+ENTRYPOINT ["java", "-jar", "app.jar"]
