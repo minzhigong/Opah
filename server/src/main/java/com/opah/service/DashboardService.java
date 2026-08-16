@@ -44,7 +44,11 @@ public class DashboardService {
 
         // Docker 状态
         DockerStatus docker = dockerFactory.ping();
-        result.put("docker", Map.of("healthy", docker.healthy(), "message", docker.message()));
+        result.put("docker", Map.of(
+                "healthy", docker.healthy(),
+                "message", docker.message(),
+                "endpoint", dockerFactory.currentEndpoint(),
+                "remote", dockerFactory.isRemote()));
 
         // 主机健康
         List<HostEntity> hostList = hosts.findAll();

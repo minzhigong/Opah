@@ -6,6 +6,11 @@ export const setup = (username: string, password: string) => client.post('/syste
 export const getDockerStatus = () => client.get('/system/docker-status');
 export const login = (username: string, password: string) => client.post('/auth/login', { username, password });
 
+// settings（Docker host 配置）
+export const getDockerSettings = () => client.get('/settings/docker');
+export const saveDockerHost = (host: string) => client.put('/settings/docker', { host });
+export const testDockerHost = (host: string) => client.post('/settings/docker/test', { host });
+
 // dashboard
 export const getOverview = () => client.get('/dashboard/overview');
 

@@ -53,16 +53,22 @@ public class SystemController {
         return ResponseEntity.ok(Map.of("ok", true, "token", com.opah.security.TokenHolder.get()));
     }
 
-    /** 是否已初始化 */
+    /** 是否已初始化（含 docker 配置状态，前端首启向导用） */
     @GetMapping("/setup-status")
     public Map<String, Object> setupStatus() {
-        return Map.of("initialized", users.count() > 0);
+        return Map.of(
+                "initialized", users.count() > 0,
+                "dockerConfigured", dockerFactory.hasExplicitConfig());
     }
 
     /** Docker Desktop 检测（INST-03 引导用） */
     @GetMapping("/docker-status")
     public Map<String, Object> dockerStatus() {
         DockerStatus s = dockerFactory.ping();
-        return Map.of("healthy", s.healthy(), "message", s.message());
+        return Map.of(
+                "healthy", s.healthy(),
+                "message", s.message(),
+                "endpoint", dockerFactory.currentEndpoint(),
+                "remote", dockerFactory.isRemote());
     }
 }

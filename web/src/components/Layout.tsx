@@ -1,5 +1,5 @@
 import { Layout as AntLayout, Menu } from 'antd';
-import { DashboardOutlined, ClusterOutlined, CloudServerOutlined, LogoutOutlined } from '@ant-design/icons';
+import { DashboardOutlined, ClusterOutlined, CloudServerOutlined, LogoutOutlined, SettingOutlined } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
 const { Header, Sider, Content } = AntLayout;
@@ -10,6 +10,7 @@ export default function Layout() {
 
   const selected = location.pathname.startsWith('/projects') ? 'projects'
     : location.pathname.startsWith('/hosts') ? 'hosts'
+    : location.pathname.startsWith('/settings') ? 'settings'
     : 'dashboard';
 
   const logout = () => {
@@ -34,11 +35,13 @@ export default function Layout() {
               if (e.key === 'dashboard') navigate('/');
               if (e.key === 'projects') navigate('/projects');
               if (e.key === 'hosts') navigate('/hosts');
+              if (e.key === 'settings') navigate('/settings');
             }}
             items={[
               { key: 'dashboard', icon: <DashboardOutlined />, label: '总览' },
               { key: 'projects', icon: <ClusterOutlined />, label: '项目' },
-              { key: 'hosts', icon: <CloudServerOutlined />, label: '主机' }
+              { key: 'hosts', icon: <CloudServerOutlined />, label: '主机' },
+              { key: 'settings', icon: <SettingOutlined />, label: '设置' }
             ]}
           />
         </Sider>

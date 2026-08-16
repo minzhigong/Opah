@@ -11,6 +11,7 @@ import ProjectDetail from './pages/ProjectDetail';
 import ServiceDetail from './pages/ServiceDetail';
 import Hosts from './pages/Hosts';
 import HostDetail from './pages/HostDetail';
+import Settings from './pages/Settings';
 import './index.css';
 
 const RequireAuth = ({ children }: { children: React.ReactNode }) => {
@@ -32,6 +33,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route path="services/:id" element={<ServiceDetail />} />
             <Route path="hosts" element={<Hosts />} />
             <Route path="hosts/:id" element={<HostDetail />} />
+            <Route path="settings" element={<Settings />} />
           </Route>
         </Routes>
       </BrowserRouter>
