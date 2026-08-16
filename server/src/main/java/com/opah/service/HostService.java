@@ -10,6 +10,7 @@ import com.opah.domain.RuntimeContainerEntity;
 import com.opah.domain.RuntimeContainerRepository;
 import com.opah.infra.CryptoService;
 import com.opah.infra.SshClientManager;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -36,22 +37,27 @@ public class HostService {
     private final SshClientManager ssh;
     private final CryptoService crypto;
     private final ObjectMapper mapper = new ObjectMapper();
+    private final SettingService settingService;
 
     public HostService(HostRepository hosts, CredentialRepository credentials,
                        RuntimeContainerRepository containers, SshClientManager ssh,
-                       CryptoService crypto) {
+                       CryptoService crypto, SettingService settingService) {
         this.hosts = hosts;
         this.credentials = credentials;
         this.containers = containers;
         this.ssh = ssh;
         this.crypto = crypto;
+        this.settingService = settingService;
     }
 
     public record HostInput(String name, String ip, Integer sshPort, String username,
-                            Long credentialId) {
+                            Long credentialId, String role) {
     }
 
     public record TestResult(boolean ok, String message, String dockerVersion, String osInfo) {
+    }
+
+    public record SetupResult(boolean ok, String message, java.util.List<String> steps) {
     }
 
     /** 添加主机并测试连通性（HOST-01/02） */
@@ -62,6 +68,7 @@ public class HostService {
         host.setSshPort(input.sshPort() == null ? 22 : input.sshPort());
         host.setUsername(input.username());
         host.setAuthCredentialId(input.credentialId());
+        host.setRole("build".equalsIgnoreCase(input.role()) ? "build" : "deploy");
         host.setStatus("UNKNOWN");
         host.setCreatedAt(now());
         host = hosts.save(host);
@@ -158,6 +165,97 @@ public class HostService {
         }
         return new SshClientManager.HostAuth(host.getIp(), host.getSshPort(),
                 host.getUsername(), secret.toCharArray(), null);
+    }
+
+    /**
+     * 构建机初始化（BUILD-05）：SSH 自动装 Docker → 开 TCP 2375 → 重启 → 验证 → 绑定为 Docker endpoint。
+     * 要求 SSH 用户为 root，或 sudo 免密（否则安装会失败）。
+     */
+    public SetupResult setupBuildMachine(Long hostId) {
+        HostEntity host = hosts.findById(hostId)
+                .orElseThrow(() -> new IllegalArgumentException("主机不存在"));
+        SshClientManager.HostAuth auth = hostAuth(host);
+        List<String> steps = new ArrayList<>();
+
+        try {
+            // 1. 检测环境
+            SshClientManager.SshResult r0 = ssh.execute(auth,
+                    "id -u; command -v docker >/dev/null 2>&1 && echo DOCKER_YES || echo DOCKER_NO; "
+                            + "grep -E '^ID=' /etc/os-release 2>/dev/null | head -1",
+                    Duration.ofSeconds(20));
+            steps.add("[检测] " + r0.stdout().replace("\n", " | "));
+            boolean isRoot = r0.stdout().trim().startsWith("0");
+            boolean dockerInstalled = r0.stdout().contains("DOCKER_YES");
+            String sudo = isRoot ? "" : "sudo ";
+            if (!isRoot) {
+                steps.add("[提示] 非 root 登录，后续命令用 sudo 执行（需免密或可交互输密码）");
+            }
+
+            // 2. 安装 Docker
+            if (!dockerInstalled) {
+                steps.add("[安装] 正在安装 Docker（约 1-3 分钟，请耐心等待）...");
+                SshClientManager.SshResult r1 = ssh.execute(auth,
+                        "curl -fsSL https://get.docker.com | " + sudo + "sh && "
+                                + sudo + "systemctl enable --now docker",
+                        Duration.ofMinutes(8));
+                steps.add("[安装] " + (r1.ok() ? "Docker 安装完成" : "失败: " + r1.stderr()));
+                if (!r1.ok()) {
+                    return new SetupResult(false, "Docker 安装失败", steps);
+                }
+            } else {
+                steps.add("[安装] Docker 已存在，跳过安装");
+            }
+
+            // 3. 配置 2375（SFTP 上传 override.conf，避免 shell 转义问题）
+            steps.add("[配置] 开启 Docker TCP API (2375)...");
+            String override = "[Service]\nExecStart=\n"
+                    + "ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2375\n";
+            ssh.upload(auth, "/tmp/opah-docker-override.conf",
+                    override.getBytes(StandardCharsets.UTF_8));
+            SshClientManager.SshResult r2 = ssh.execute(auth,
+                    sudo + "mkdir -p /etc/systemd/system/docker.service.d && "
+                            + sudo + "cp /tmp/opah-docker-override.conf /etc/systemd/system/docker.service.d/override.conf && "
+                            + sudo + "systemctl daemon-reload && " + sudo + "systemctl restart docker",
+                    Duration.ofMinutes(2));
+            steps.add("[配置] " + (r2.ok() ? "完成，dockerd 已重启" : "失败: " + r2.stderr()));
+            if (!r2.ok()) {
+                return new SetupResult(false, "Docker TCP 配置失败", steps);
+            }
+
+            // 4. 验证
+            steps.add("[验证] 等待 dockerd 就绪...");
+            SshClientManager.SshResult r3 = ssh.execute(auth,
+                    "sleep 3 && docker version --format '{{.Server.Version}}' 2>&1",
+                    Duration.ofSeconds(40));
+            steps.add("[验证] Docker Server 版本: " + r3.stdout().trim());
+            SshClientManager.SshResult r4 = ssh.execute(auth,
+                    "curl -s http://127.0.0.1:2375/version 2>&1 | head -c 80",
+                    Duration.ofSeconds(15));
+            steps.add("[验证] 2375 API 探测: " + (r4.stdout().contains("Version") ? "正常" : r4.stdout()));
+
+            // 5. 更新主机信息 + 绑定为 Docker endpoint
+            String ver = r3.stdout().trim();
+            if (!ver.isEmpty() && !ver.toLowerCase().startsWith("error") && !ver.contains("permission")) {
+                host.setDockerVersion(ver);
+            }
+            host.setStatus("ONLINE");
+            hosts.save(host);
+
+            String endpoint = "tcp://" + host.getIp() + ":2375";
+            settingService.saveDockerHost(endpoint);
+            steps.add("[绑定] Docker endpoint 已设为 " + endpoint);
+
+            return new SetupResult(true, "构建机就绪: " + endpoint, steps);
+        } catch (Exception e) {
+            log.warn("setup build machine {} failed: {}", host.getIp(), e.getMessage());
+            String msg = e.getMessage() == null ? "未知错误" : e.getMessage();
+            if (msg.contains("拒绝") || msg.contains("refused") || msg.contains("timeout")
+                    || msg.contains("Connection") || msg.contains("connect")) {
+                msg = "SSH 连接失败，请检查主机 IP、端口、用户名和凭据";
+            }
+            steps.add("[失败] " + msg);
+            return new SetupResult(false, msg, steps);
+        }
     }
 
     private String now() {

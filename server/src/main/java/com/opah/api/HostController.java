@@ -61,11 +61,19 @@ public class HostController {
                 (String) body.get("ip"),
                 body.get("sshPort") == null ? 22 : Integer.valueOf(String.valueOf(body.get("sshPort"))),
                 (String) body.get("username"),
-                credentialId);
+                credentialId,
+                body.get("role") == null ? "deploy" : String.valueOf(body.get("role")));
         HostEntity host = hostService.add(input);
-        return Map.of("id", host.getId(), "status", host.getStatus(),
+        return Map.of("id", host.getId(), "status", host.getStatus(), "role", host.getRole(),
                 "dockerVersion", host.getDockerVersion() == null ? "" : host.getDockerVersion(),
                 "osInfo", host.getOsInfo() == null ? "" : host.getOsInfo());
+    }
+
+    /** 构建机初始化：SSH 自动装 Docker + 开 2375 + 绑定 endpoint */
+    @PostMapping("/{id}/setup-build-machine")
+    public Map<String, Object> setupBuildMachine(@PathVariable Long id) {
+        HostService.SetupResult r = hostService.setupBuildMachine(id);
+        return Map.of("ok", r.ok(), "message", r.message(), "steps", r.steps());
     }
 
     @PostMapping("/{id}/test")

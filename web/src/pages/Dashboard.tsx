@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Alert, Table, Tag, Spin, Button, Space, Tag as AntTag } from 'antd';
-import { SettingOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Statistic, Alert, Table, Tag, Spin, Button, Space } from 'antd';
+import { CloudServerOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { getOverview } from '../api';
-import DockerConfigModal from '../components/DockerConfigModal';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [dockerModalOpen, setDockerModalOpen] = useState(false);
 
   useEffect(() => {
     const load = () => getOverview().then((r) => { setData(r.data); setLoading(false); });
     load();
-    const t = setInterval(load, 10000);   // 每 10s 轮询，Docker 状态后台探测完成后自动更新
+    const t = setInterval(load, 10000);
     return () => clearInterval(t);
   }, []);
 
@@ -26,28 +26,23 @@ export default function Dashboard() {
     <div>
       {!docker.healthy && (
         <Alert type="warning" showIcon style={{ marginBottom: 16 }}
-          message={
-            <Space>
-              <span>Docker 环境异常</span>
-              {docker.remote && <AntTag color="blue">远程 {docker.endpoint}</AntTag>}
-            </Space>
-          }
+          message="Docker 环境未就绪"
           description={
             <Space direction="vertical" size={4}>
               <span>
-                {docker.message || '未检测到可用的 Docker 引擎。'}
-                {docker.remote
-                  ? '（当前使用远程构建机，请确认服务器 Docker 服务、端口开放与防火墙）'
-                  : '本机无 Docker？可改用远程 Linux 服务器作为构建机。'}
+                {docker.message || '尚未检测到可用的 Docker 引擎。'}
+                {docker.remote && <Tag color="blue" style={{ marginLeft: 8 }}>远程 {docker.endpoint}</Tag>}
+              </span>
+              <span>
+                构建镜像需要 Docker 引擎。本机没有 Docker Desktop？去「主机」页添加一台
+                Linux 服务器作为<strong>构建机</strong>，Opah 会自动安装 Docker 并绑定。
               </span>
               <Button
-                size="small"
-                type="primary"
-                ghost
-                icon={<SettingOutlined />}
-                onClick={() => setDockerModalOpen(true)}
+                size="small" type="primary" ghost
+                icon={<CloudServerOutlined />}
+                onClick={() => navigate('/hosts')}
               >
-                配置 Docker（本机 / 远程构建机）
+                去添加构建机
               </Button>
             </Space>
           }
@@ -55,7 +50,7 @@ export default function Dashboard() {
       )}
       {docker.healthy && docker.remote && (
         <Alert type="success" showIcon style={{ marginBottom: 16 }}
-          message={<Space>Docker 引擎就绪 <AntTag color="green">远程 {docker.endpoint}</AntTag></Space>}
+          message={<Space>Docker 引擎就绪 <Tag color="green">远程 {docker.endpoint}</Tag></Space>}
           description="构建任务将发送到远程构建机执行。"
         />
       )}
@@ -80,12 +75,6 @@ export default function Dashboard() {
           ]}
         />
       </Card>
-
-      <DockerConfigModal
-        open={dockerModalOpen}
-        onClose={() => setDockerModalOpen(false)}
-        onSaved={() => window.location.reload()}
-      />
     </div>
   );
 }

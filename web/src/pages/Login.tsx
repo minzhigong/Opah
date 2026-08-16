@@ -2,24 +2,14 @@ import { useState, useEffect } from 'react';
 import { Form, Input, Button, Card, Alert, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { getSetupStatus, setup, login } from '../api';
-import DockerConfigModal from '../components/DockerConfigModal';
 
 export default function Login() {
   const navigate = useNavigate();
   const [initialized, setInitialized] = useState<boolean | null>(null);
-  const [dockerConfigured, setDockerConfigured] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showDockerGuide, setShowDockerGuide] = useState(false);
-
-  const refreshStatus = () => {
-    getSetupStatus().then((r) => {
-      setInitialized(r.data.initialized);
-      setDockerConfigured(r.data.dockerConfigured);
-    });
-  };
 
   useEffect(() => {
-    refreshStatus();
+    getSetupStatus().then((r) => setInitialized(r.data.initialized));
   }, []);
 
   const onFinish = async (values: any) => {
@@ -28,13 +18,6 @@ export default function Login() {
       if (!initialized) {
         const r = await setup(values.username || 'admin', values.password);
         localStorage.setItem('opah_token', r.data.token);
-        // 首次设置成功 → 直接引导配置 Docker（若未配置过）
-        refreshStatus();
-        if (dockerConfigured === false || dockerConfigured === null) {
-          message.success('管理员创建成功，请配置 Docker 环境');
-          setShowDockerGuide(true);
-          return;
-        }
       } else {
         const r = await login(values.username || 'admin', values.password);
         localStorage.setItem('opah_token', r.data.token);
@@ -46,11 +29,6 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const dockerSaved = () => {
-    message.success('Docker 环境已保存，进入控制台');
-    navigate('/');
   };
 
   return (
@@ -71,15 +49,6 @@ export default function Login() {
           </Button>
         </Form>
       </Card>
-
-      <DockerConfigModal
-        open={showDockerGuide}
-        onClose={() => {
-          setShowDockerGuide(false);
-          navigate('/');
-        }}
-        onSaved={dockerSaved}
-      />
     </div>
   );
 }

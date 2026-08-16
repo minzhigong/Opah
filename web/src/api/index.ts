@@ -18,6 +18,7 @@ export const getOverview = () => client.get('/dashboard/overview');
 export const listHosts = () => client.get('/hosts');
 export const addHost = (data: any) => client.post('/hosts', data);
 export const testHost = (id: number) => client.post(`/hosts/${id}/test`);
+export const setupBuildMachine = (id: number) => client.post(`/hosts/${id}/setup-build-machine`);
 export const listHostContainers = (id: number) => client.get(`/hosts/${id}/containers`);
 export const deleteHost = (id: number) => client.delete(`/hosts/${id}`);
 export const containerAction = (hostId: number, cid: string, action: string) =>

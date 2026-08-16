@@ -27,6 +27,9 @@ public class HostEntity {
     @Column(name = "auth_credential_id")
     private Long authCredentialId;
 
+    /** 角色：deploy=部署目标机(默认) / build=构建机 */
+    private String role;
+
     private String status;
 
     @Column(name = "docker_version")
@@ -56,6 +59,8 @@ public class HostEntity {
     public void setUsername(String username) { this.username = username; }
     public Long getAuthCredentialId() { return authCredentialId; }
     public void setAuthCredentialId(Long authCredentialId) { this.authCredentialId = authCredentialId; }
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getDockerVersion() { return dockerVersion; }
