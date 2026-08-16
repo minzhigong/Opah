@@ -23,6 +23,11 @@ spring:
     locations: classpath:db/migration
   jackson:
     default-property-inclusion: non_null
+  task:
+    scheduling:
+      pool:
+        size: 3
+      thread-name-prefix: opah-task-
 
 opah:
   data-dir: ./data

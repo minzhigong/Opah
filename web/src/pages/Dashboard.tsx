@@ -7,7 +7,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getOverview().then((r) => { setData(r.data); setLoading(false); });
+    const load = () => getOverview().then((r) => { setData(r.data); setLoading(false); });
+    load();
+    const t = setInterval(load, 10000);   // 每 10s 轮询，Docker 状态后台探测完成后自动更新
+    return () => clearInterval(t);
   }, []);
 
   if (loading) return <Spin />;
