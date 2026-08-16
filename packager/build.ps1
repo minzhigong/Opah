@@ -57,7 +57,14 @@ Write-Host "[5/5] jpackage app-image..." -ForegroundColor Cyan
   --dest $outDir
 if ($LASTEXITCODE -ne 0) { throw "jpackage failed" }
 
-# 打包 zip
+# 打包 zip（排除 data 目录：升级时只替换代码，不覆盖用户数据）
 $zipName = "opah-windows.zip"
-Compress-Archive -Path "$outDir\opah\*" -DestinationPath "$root\packager\out\$zipName" -Force
+$staging = "$root\packager\out\.staging"
+if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
+New-Item -ItemType Directory -Path $staging | Out-Null
+Get-ChildItem "$outDir\opah" | Where-Object { $_.Name -ne "data" } | ForEach-Object {
+    Copy-Item $_.FullName -Destination $staging -Recurse
+}
+Compress-Archive -Path "$staging\*" -DestinationPath "$root\packager\out\$zipName" -Force
+Remove-Item $staging -Recurse -Force
 Write-Host "DONE: $root\packager\out\$zipName" -ForegroundColor Green
