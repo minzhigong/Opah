@@ -51,7 +51,7 @@ public class HostService {
     }
 
     public record HostInput(String name, String ip, Integer sshPort, String username,
-                            Long credentialId, String role) {
+                            Long credentialId) {
     }
 
     public record TestResult(boolean ok, String message, String dockerVersion, String osInfo) {
@@ -60,7 +60,7 @@ public class HostService {
     public record SetupResult(boolean ok, String message, java.util.List<String> steps) {
     }
 
-    /** 添加主机并测试连通性（HOST-01/02） */
+    /** 添加主机并测试连通性（HOST-01/02）。主机不区分角色，构建机通过「指定」动作标记。 */
     public HostEntity add(HostInput input) {
         HostEntity host = new HostEntity();
         host.setName(input.name());
@@ -68,7 +68,7 @@ public class HostService {
         host.setSshPort(input.sshPort() == null ? 22 : input.sshPort());
         host.setUsername(input.username());
         host.setAuthCredentialId(input.credentialId());
-        host.setRole("build".equalsIgnoreCase(input.role()) ? "build" : "deploy");
+        host.setRole("deploy");
         host.setStatus("UNKNOWN");
         host.setCreatedAt(now());
         host = hosts.save(host);
@@ -168,12 +168,23 @@ public class HostService {
     }
 
     /**
-     * 构建机初始化（BUILD-05）：SSH 自动装 Docker → 开 TCP 2375 → 重启 → 验证 → 绑定为 Docker endpoint。
-     * 要求 SSH 用户为 root，或 sudo 免密（否则安装会失败）。
+     * 设为构建机（BUILD-05）：标记 role=build（清掉其他主机的标记，单构建机）→
+     * SSH 自动装 Docker → 开 TCP 2375 → 重启 → 验证 → 绑定为 Docker endpoint。
+     * 一台主机可同时是构建机 + 部署目标（标记互不影响）。要求 SSH 用户为 root 或 sudo 免密。
      */
-    public SetupResult setupBuildMachine(Long hostId) {
+    public SetupResult setBuildMachine(Long hostId) {
         HostEntity host = hosts.findById(hostId)
                 .orElseThrow(() -> new IllegalArgumentException("主机不存在"));
+        // 标记：清掉其他主机的 build 标记，这台设为 build
+        for (HostEntity h : hosts.findAll()) {
+            if (h.getRole() != null && "build".equals(h.getRole()) && !h.getId().equals(hostId)) {
+                h.setRole("deploy");
+                hosts.save(h);
+            }
+        }
+        host.setRole("build");
+        hosts.save(host);
+
         SshClientManager.HostAuth auth = hostAuth(host);
         List<String> steps = new ArrayList<>();
 
@@ -254,8 +265,19 @@ public class HostService {
                 msg = "SSH 连接失败，请检查主机 IP、端口、用户名和凭据";
             }
             steps.add("[失败] " + msg);
+            host.setRole("deploy");   // 安装失败则撤销构建机标记
+            hosts.save(host);
             return new SetupResult(false, msg, steps);
         }
+    }
+
+    /** 取消构建机标记，Docker endpoint 恢复本机模式 */
+    public void unsetBuildMachine(Long hostId) {
+        hosts.findById(hostId).ifPresent(h -> {
+            h.setRole("deploy");
+            hosts.save(h);
+        });
+        settingService.saveDockerHost("local");
     }
 
     private String now() {
