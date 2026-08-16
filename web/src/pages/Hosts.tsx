@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Tag, message, Popconfirm, Space, Alert } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Tag, message, Popconfirm, Space } from 'antd';
 import { PlusOutlined, BuildOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { listHosts, addHost, testHost, deleteHost, setBuildMachine, unsetBuildMachine } from '../api';
+import { listHosts, addHost, testHost, deleteHost } from '../api';
 
 const STATUS_COLOR: Record<string, string> = { ONLINE: 'green', OFFLINE: 'red', UNKNOWN: 'default' };
 
@@ -13,10 +13,6 @@ export default function Hosts() {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
-
-  const [setupHost, setSetupHost] = useState<any>(null);
-  const [setupLoading, setSetupLoading] = useState(false);
-  const [setupResult, setSetupResult] = useState<any>(null);
 
   const load = () => {
     setLoading(true);
@@ -45,33 +41,6 @@ export default function Hosts() {
     }
   };
 
-  const doSetBuildMachine = async (host: any) => {
-    setSetupHost(host);
-    setSetupResult(null);
-    setSetupLoading(true);
-    try {
-      const r = await setBuildMachine(host.id);
-      setSetupResult(r.data);
-      if (r.data.ok) message.success('已设为构建机，并自动绑定为 Docker 环境');
-      else message.error(r.data.message);
-    } catch (e: any) {
-      setSetupResult({ ok: false, message: e.response?.data?.message || '设置失败', steps: [] });
-    } finally {
-      setSetupLoading(false);
-      load();
-    }
-  };
-
-  const doUnsetBuildMachine = async (host: any) => {
-    try {
-      await unsetBuildMachine(host.id);
-      message.success('已取消构建机，Docker 环境切回本机');
-      load();
-    } catch (e: any) {
-      message.error(e.response?.data?.message || '操作失败');
-    }
-  };
-
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
@@ -95,16 +64,9 @@ export default function Hosts() {
           { title: '用户', dataIndex: 'username' },
           { title: '状态', dataIndex: 'status', render: (s: string) => <Tag color={STATUS_COLOR[s]}>{s}</Tag> },
           { title: 'Docker', dataIndex: 'dockerVersion', ellipsis: true },
-          { title: '操作', width: 200, render: (_, r: any) => (
+          { title: '操作', width: 140, render: (_, r: any) => (
             <Space>
               <a onClick={async (e) => { e.stopPropagation(); await testHost(r.id); load(); }}>检测</a>
-              {r.role === 'build' ? (
-                <Popconfirm title="取消该主机的构建机标记？" onConfirm={() => doUnsetBuildMachine(r)}>
-                  <a onClick={(e) => e.stopPropagation()}>取消构建机</a>
-                </Popconfirm>
-              ) : (
-                <a onClick={(e) => { e.stopPropagation(); doSetBuildMachine(r); }}>设为构建机</a>
-              )}
               <Popconfirm title="删除该主机？" onConfirm={async () => { await deleteHost(r.id); load(); }}>
                 <a style={{ color: 'red' }} onClick={(e) => e.stopPropagation()}>删除</a>
               </Popconfirm>
@@ -122,34 +84,6 @@ export default function Hosts() {
           <Form.Item name="password" label="密码（或用私钥）"><Input.Password /></Form.Item>
           <Form.Item name="privateKey" label="私钥（可选，内容粘贴）"><Input.TextArea rows={3} /></Form.Item>
         </Form>
-      </Modal>
-
-      <Modal
-        title={`设为构建机：${setupHost?.name || ''}`}
-        open={!!setupHost}
-        onCancel={() => setSetupHost(null)}
-        footer={<Button onClick={() => setSetupHost(null)}>关闭</Button>}
-        width={620}
-      >
-        <Alert
-          type="info" showIcon style={{ marginBottom: 12 }}
-          message="将自动完成：安装 Docker → 开启 2375 端口 → 重启 → 验证 → 绑定为 Docker 环境"
-          description="要求 SSH 用户为 root 或 sudo 免密。全程约 1-3 分钟，请勿关闭。该主机仍可同时作为部署目标。"
-        />
-        {setupLoading && <div style={{ color: '#1677ff' }}>正在执行，请稍候…</div>}
-        {setupResult && (
-          <div>
-            <Alert
-              style={{ marginBottom: 12 }}
-              type={setupResult.ok ? 'success' : 'error'}
-              showIcon
-              message={setupResult.message}
-            />
-            <div className="log-viewer" style={{ maxHeight: 320 }}>
-              {(setupResult.steps || []).map((s: string, i: number) => <div key={i}>{s}</div>)}
-            </div>
-          </div>
-        )}
       </Modal>
     </div>
   );

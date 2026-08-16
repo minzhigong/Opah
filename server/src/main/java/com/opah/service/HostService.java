@@ -271,12 +271,18 @@ public class HostService {
         }
     }
 
+    /** 当前被指定为构建机的主机（无则 null） */
+    public HostEntity getBuildMachineHost() {
+        List<HostEntity> list = hosts.findByRole("build");
+        return list.isEmpty() ? null : list.get(0);
+    }
+
     /** 取消构建机标记，Docker endpoint 恢复本机模式 */
-    public void unsetBuildMachine(Long hostId) {
-        hosts.findById(hostId).ifPresent(h -> {
+    public void unsetBuildMachine() {
+        for (HostEntity h : hosts.findByRole("build")) {
             h.setRole("deploy");
             hosts.save(h);
-        });
+        }
         settingService.saveDockerHost("local");
     }
 

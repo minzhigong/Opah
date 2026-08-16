@@ -6,10 +6,10 @@ export const setup = (username: string, password: string) => client.post('/syste
 export const getDockerStatus = () => client.get('/system/docker-status');
 export const login = (username: string, password: string) => client.post('/auth/login', { username, password });
 
-// settings（Docker host 配置）
+// settings（构建机指定）
 export const getDockerSettings = () => client.get('/settings/docker');
-export const saveDockerHost = (host: string) => client.put('/settings/docker', { host });
-export const testDockerHost = (host: string) => client.post('/settings/docker/test', { host });
+export const setBuildMachine = (hostId: number) => client.put('/settings/build-machine', { hostId });
+export const unsetBuildMachine = () => client.delete('/settings/build-machine');
 
 // dashboard
 export const getOverview = () => client.get('/dashboard/overview');
@@ -18,8 +18,6 @@ export const getOverview = () => client.get('/dashboard/overview');
 export const listHosts = () => client.get('/hosts');
 export const addHost = (data: any) => client.post('/hosts', data);
 export const testHost = (id: number) => client.post(`/hosts/${id}/test`);
-export const setBuildMachine = (id: number) => client.post(`/hosts/${id}/set-build-machine`);
-export const unsetBuildMachine = (id: number) => client.post(`/hosts/${id}/unset-build-machine`);
 export const listHostContainers = (id: number) => client.get(`/hosts/${id}/containers`);
 export const deleteHost = (id: number) => client.delete(`/hosts/${id}`);
 export const containerAction = (hostId: number, cid: string, action: string) =>

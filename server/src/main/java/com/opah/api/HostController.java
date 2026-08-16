@@ -68,20 +68,6 @@ public class HostController {
                 "osInfo", host.getOsInfo() == null ? "" : host.getOsInfo());
     }
 
-    /** 设为构建机：SSH 自动装 Docker + 开 2375 + 绑定 endpoint */
-    @PostMapping("/{id}/set-build-machine")
-    public Map<String, Object> setBuildMachine(@PathVariable Long id) {
-        HostService.SetupResult r = hostService.setBuildMachine(id);
-        return Map.of("ok", r.ok(), "message", r.message(), "steps", r.steps());
-    }
-
-    /** 取消构建机标记 */
-    @PostMapping("/{id}/unset-build-machine")
-    public Map<String, Object> unsetBuildMachine(@PathVariable Long id) {
-        hostService.unsetBuildMachine(id);
-        return Map.of("ok", true);
-    }
-
     @PostMapping("/{id}/test")
     public Map<String, Object> test(@PathVariable Long id) {
         HostService.TestResult r = hostService.test(id);

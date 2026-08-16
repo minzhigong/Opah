@@ -34,15 +34,15 @@ export default function Dashboard() {
                 {docker.remote && <Tag color="blue" style={{ marginLeft: 8 }}>远程 {docker.endpoint}</Tag>}
               </span>
               <span>
-                构建镜像需要 Docker 引擎。本机没有 Docker Desktop？去「主机」页添加一台
-                Linux 服务器，点「设为构建机」，Opah 会自动安装 Docker 并绑定（该主机仍可作部署目标）。
+                构建镜像需要 Docker 引擎。本机没有 Docker Desktop？先到「主机」页添加一台
+                Linux 服务器，再到「设置」里把它指定为构建机，Opah 会自动安装 Docker 并绑定。
               </span>
               <Button
                 size="small" type="primary" ghost
                 icon={<CloudServerOutlined />}
-                onClick={() => navigate('/hosts')}
+                onClick={() => navigate('/settings')}
               >
-                去添加构建机
+                去设置指定构建机
               </Button>
             </Space>
           }

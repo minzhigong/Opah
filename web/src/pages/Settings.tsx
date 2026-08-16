@@ -1,127 +1,118 @@
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, Radio, Alert, Space, Typography, message } from 'antd';
-import { ApiOutlined, SaveOutlined } from '@ant-design/icons';
-import { getDockerSettings, testDockerHost, saveDockerHost } from '../api';
-
-const { Text } = Typography;
+import { Card, Form, Select, Button, Alert, Space, Tag, message } from 'antd';
+import { BuildOutlined } from '@ant-design/icons';
+import { getDockerSettings, listHosts, setBuildMachine, unsetBuildMachine } from '../api';
 
 export default function Settings() {
-  const [form] = Form.useForm();
-  const [mode, setMode] = useState<'local' | 'remote'>('local');
-  const [loading, setLoading] = useState(true);
-  const [testing, setTesting] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [testResult, setTestResult] = useState<{ healthy: boolean; message: string } | null>(null);
-  const [current, setCurrent] = useState<any>(null);
+  const [hosts, setHosts] = useState<any[]>([]);
+  const [docker, setDocker] = useState<any>(null);
+  const [selectedHostId, setSelectedHostId] = useState<number | undefined>(undefined);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
 
-  useEffect(() => {
+  const load = () => {
+    listHosts().then((r) => setHosts(r.data));
     getDockerSettings().then((r) => {
-      const d = r.data;
-      setCurrent(d);
-      if (d.host && d.host !== 'local') {
-        setMode('remote');
-        form.setFieldValue('host', d.host);
-      }
-      setLoading(false);
+      setDocker(r.data);
+      if (r.data.buildHostId) setSelectedHostId(r.data.buildHostId);
     });
-  }, []);
+  };
 
-  const hostValue = () => (mode === 'local' ? 'local' : form.getFieldValue('host') || '');
+  useEffect(load, []);
 
-  const doTest = async () => {
-    if (mode === 'remote') {
-      const host = form.getFieldValue('host');
-      if (!host || !/^tcp:\/\/.+:\d+$/.test(host)) {
-        setTestResult({ healthy: false, message: '地址格式应为 tcp://服务器IP:2375' });
-        return;
-      }
+  const doSet = async () => {
+    if (!selectedHostId) {
+      message.warning('请先选择一台主机');
+      return;
     }
-    setTesting(true);
-    setTestResult(null);
+    setLoading(true);
+    setResult(null);
     try {
-      const r = await testDockerHost(hostValue());
-      setTestResult(r.data);
+      const r = await setBuildMachine(selectedHostId);
+      setResult(r.data);
+      if (r.data.ok) message.success('构建机设置成功，Docker 环境已绑定');
+      else message.error(r.data.message);
     } catch (e: any) {
-      setTestResult({ healthy: false, message: e.response?.data?.message || '请求失败' });
+      setResult({ ok: false, message: e.response?.data?.message || '设置失败', steps: [] });
     } finally {
-      setTesting(false);
+      setLoading(false);
+      load();
     }
   };
 
-  const doSave = async () => {
-    if (mode === 'remote') {
-      const host = form.getFieldValue('host');
-      if (!host || !/^tcp:\/\/.+:\d+$/.test(host)) {
-        setTestResult({ healthy: false, message: '地址格式应为 tcp://服务器IP:2375' });
-        return;
-      }
-    }
-    setSaving(true);
+  const doUnset = async () => {
     try {
-      await saveDockerHost(hostValue());
-      message.success('已保存');
-      const r = await getDockerSettings();
-      setCurrent(r.data);
-    } finally {
-      setSaving(false);
+      await unsetBuildMachine();
+      message.success('已取消构建机，Docker 环境切回本机');
+      setResult(null);
+      load();
+    } catch (e: any) {
+      message.error(e.response?.data?.message || '操作失败');
     }
   };
-
-  if (loading) return null;
 
   return (
-    <Card title="Docker 环境" style={{ maxWidth: 720 }}>
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
-        <Text type="secondary">
-          构建镜像依赖 Docker 引擎。本机无 Docker Desktop 时，可使用远程 Linux 服务器作为构建机
-          （需在服务器上开启 Docker TCP API，默认端口 2375）。
-        </Text>
-        {current && (
+    <Card title="Docker 构建机" style={{ maxWidth: 720 }}>
+      <Space direction="vertical" size={14} style={{ width: '100%' }}>
+        {docker && (
           <Alert
-            type={current.healthy ? 'success' : 'warning'}
+            type={docker.healthy ? 'success' : 'warning'}
             showIcon
             message={
-              `当前: ${current.remote ? `远程 ${current.endpoint}` : '本机 Docker'} · ` +
-              (current.healthy ? '引擎正常' : '引擎不可用')
+              docker.buildHostId
+                ? `当前构建机：${docker.buildHostName} (${docker.buildHostIp}) · ` +
+                  (docker.healthy ? '引擎正常' : '引擎不可用')
+                : '尚未指定构建机（当前使用本机 Docker，不可用）'
             }
-            description={current.healthy ? undefined : current.message}
+            description={docker.healthy ? undefined : docker.message}
           />
         )}
-        <Form form={form} layout="vertical">
-          <Form.Item label="模式">
-            <Radio.Group
-              value={mode}
-              onChange={(e) => { setMode(e.target.value); setTestResult(null); }}
-              optionType="button"
-              buttonStyle="solid"
-            >
-              <Radio.Button value="local">本机 Docker</Radio.Button>
-              <Radio.Button value="remote">远程 Linux 构建机</Radio.Button>
-            </Radio.Group>
-          </Form.Item>
-          {mode === 'remote' && (
-            <Form.Item
-              name="host"
-              label="Docker API 地址"
-              rules={[{ required: true, message: '请输入 tcp://IP:端口' }]}
-              extra="示例：tcp://123.45.67.89:2375"
-            >
-              <Input placeholder="tcp://服务器IP:2375" style={{ width: 360 }} />
-            </Form.Item>
-          )}
-          {testResult && (
+
+        <div>
+          <div style={{ marginBottom: 8 }}>
+            从已有主机中指定一台作为构建机。Opah 会自动在其上安装 Docker 并绑定为构建环境，
+            该主机仍可同时作为部署目标。若主机列表为空，请先到「主机」页添加。
+          </div>
+          <Select
+            placeholder="选择主机"
+            style={{ width: 380 }}
+            value={selectedHostId}
+            onChange={setSelectedHostId}
+            options={hosts.map((h) => ({
+              value: h.id,
+              label: `${h.name} (${h.ip})${h.role === 'build' ? ' · 当前构建机' : ''}`,
+            }))}
+            optionRender={(o) => (
+              <Space>
+                <span>{o.label}</span>
+                {hosts.find((h) => h.id === o.value)?.role === 'build' && (
+                  <Tag color="geekblue" icon={<BuildOutlined />}>构建机</Tag>
+                )}
+              </Space>
+            )}
+          />
+        </div>
+
+        <Space>
+          <Button type="primary" loading={loading} onClick={doSet}>设为构建机</Button>
+          {docker?.buildHostId && <Button danger onClick={doUnset}>取消构建机</Button>}
+        </Space>
+
+        {result && (
+          <div>
             <Alert
               style={{ marginBottom: 12 }}
-              type={testResult.healthy ? 'success' : 'error'}
+              type={result.ok ? 'success' : 'error'}
               showIcon
-              message={testResult.healthy ? '连接成功，Docker 引擎可用' : `连接失败：${testResult.message}`}
+              message={result.message}
             />
-          )}
-          <Space>
-            <Button icon={<ApiOutlined />} loading={testing} onClick={doTest}>测试连接</Button>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={doSave}>保存</Button>
-          </Space>
-        </Form>
+            {result.steps && result.steps.length > 0 && (
+              <div className="log-viewer" style={{ maxHeight: 300 }}>
+                {result.steps.map((s: string, i: number) => <div key={i}>{s}</div>)}
+              </div>
+            )}
+          </div>
+        )}
       </Space>
     </Card>
   );
